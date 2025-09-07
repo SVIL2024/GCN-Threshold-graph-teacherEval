@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.data import Data
 from sklearn.metrics import classification_report, confusion_matrix
-from models import SGCModel, APPNPModel, EnhancedGCNModel, EnhancedGATModel
+from models import  EnhancedGCNModel
 from graphbulider import EnhancedGraphBuilder
 from config import Config
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score, classification_report
@@ -281,7 +281,6 @@ class EnhancedExperimentManager:
 
     def ensemble_predict(self, models, data, model_weights=None):
         """Ensemble prediction with weighted voting"""
-        import torch
         
         if model_weights is None:
             model_weights = [1.0] * len(models)  # Default equal weights
@@ -306,148 +305,6 @@ class EnhancedExperimentManager:
         final_pred = weighted_probs.argmax(dim=1)
         return final_pred
 
-    # Modify compare_all_combinations method in EnhancedExperimentManager class
-    def compare_all_combinations(self):
-        """Compare all graph construction methods and models with comprehensive metrics"""
-        print("="*60)
-        print("Starting comprehensive comparison experiment")
-        print("="*60)
-        
-        # Store results
-        results = []
-        
-        # Run experiments for each graph construction method and model
-        for graph_method in Config.GRAPH_METHODS:
-            method_name = graph_method[0]
-            print(f"\n--- Using {method_name} ---")
-            
-            for model_name, model_config in Config.MODELS.items():
-                print(f"  Training {model_name} model...")
-                
-                # Get model class
-                model_classes = {
-                    "EnhancedGCNModel": EnhancedGCNModel,
-                    "EnhancedGATModel": EnhancedGATModel,
-                    "SGCModel": SGCModel,
-                    "APPNPModel": APPNPModel
-                }
-                
-                try:
-                    # Receive all return values
-                    acc, _, _, _, detailed_metrics = self.run_experiment(
-                        graph_method,
-                        model_classes[model_config["class"]],
-                        model_config["params"],
-                        model_config["training"]
-                    )
-                    
-                    results.append({
-                        "Graph Method": method_name,
-                        "Model": model_name,
-                        "Accuracy": acc,
-                        "F1-Score (Weighted)": detailed_metrics['f1_weighted'],
-                        "F1-Score (Macro)": detailed_metrics['f1_macro'],
-                        "Precision (Weighted)": detailed_metrics['precision_weighted'],
-                        "Recall (Weighted)": detailed_metrics['recall_weighted'],
-                        "AUC": detailed_metrics.get('auc', 0.0)
-                    })
-                    print(f"  {model_name} accuracy: {acc:.4f}")
-                    
-                except Exception as e:
-                    print(f"  {model_name} training failed: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    results.append({
-                        "Graph Method": method_name,
-                        "Model": model_name,
-                        "Accuracy": 0.0,
-                        "F1-Score (Weighted)": 0.0,
-                        "F1-Score (Macro)": 0.0,
-                        "Precision (Weighted)": 0.0,
-                        "Recall (Weighted)": 0.0,
-                        "AUC": 0.0
-                    })
-        
-        # Summary of results
-        print("\n" + "="*60)
-        print("Experimental Results Summary")
-        print("="*60)
-        
-        # Convert to DataFrame for analysis
-        results_df = pd.DataFrame(results)
-        print(results_df.to_string(index=False))
-        
-        # Find best combination based on F1-score (better for imbalanced data)
-        best_result_idx = results_df['F1-Score (Weighted)'].idxmax()
-        best_result = results_df.loc[best_result_idx]
-        print(f"\nBest combination (based on F1-weighted score):")
-        print(f"  Graph method: {best_result['Graph Method']}")
-        print(f"  Model: {best_result['Model']}")
-        print(f"  F1-Score (weighted): {best_result['F1-Score (Weighted)']:.4f}")
-        print(f"  F1-Score (macro): {best_result['F1-Score (Macro)']:.4f}")
-        print(f"  Accuracy: {best_result['Accuracy']:.4f}")
-        print(f"  Precision (weighted): {best_result['Precision (Weighted)']:.4f}")
-        print(f"  Recall (weighted): {best_result['Recall (Weighted)']:.4f}")
-        if 'AUC' in best_result:
-            print(f"  AUC: {best_result['AUC']:.4f}")
-        
-        # Average performance by graph method
-        print("\nAverage performance by graph method (based on F1-weighted score):")
-        graph_performance = results_df.groupby('Graph Method')['F1-Score (Weighted)'].mean().sort_values(ascending=False)
-        for method, avg_f1 in graph_performance.items():
-            print(f"  {method}: {avg_f1:.4f}")
-        
-        # Average performance by model
-        print("\nAverage performance by model (based on F1-weighted score):")
-        model_performance = results_df.groupby('Model')['F1-Score (Weighted)'].mean().sort_values(ascending=False)
-        for model, avg_f1 in model_performance.items():
-            print(f"  {model}: {avg_f1:.4f}")
-        
-        return results_df
-
-
-    def ensemble_predict(self, models, data, model_weights=None):
-        """模型集成预测 - 支持加权投票"""
-        import torch
-        
-        # 检查是否有GAT模型
-        has_gat_model = any("GAT" in model.__class__.__name__ for model in models)
-        
-        # 保存当前确定性算法状态
-        deterministic_was_enabled = torch.are_deterministic_algorithms_enabled() if hasattr(torch, 'are_deterministic_algorithms_enabled') else True
-        
-        # 如果有GAT模型，临时禁用确定性算法
-        # if has_gat_model:
-        #     torch.use_deterministic_algorithms(False)
-        
-        try:
-            if model_weights is None:
-                model_weights = [1.0] * len(models)  # 默认等权重
-            
-            predictions = []
-            for model in models:
-                model.eval()
-                with torch.no_grad():
-                    # 获取概率分布而不是直接预测
-                    logits = model(data)
-                    probs = torch.softmax(logits, dim=1)
-                    predictions.append(probs)
-            
-            # 加权平均
-            weighted_probs = torch.zeros_like(predictions[0])
-            total_weight = sum(model_weights)
-            
-            for i, (probs, weight) in enumerate(zip(predictions, model_weights)):
-                weighted_probs += probs * (weight / total_weight)
-            
-            # 最终预测
-            final_pred = weighted_probs.argmax(dim=1)
-            return final_pred
-            
-        finally:
-            # 恢复原来的确定性算法设置
-            if has_gat_model and deterministic_was_enabled:
-                torch.use_deterministic_algorithms(True)
 
     # Add new method in EnhancedExperimentManager class
     def calculate_detailed_metrics(self, y_true, y_pred, y_prob=None):

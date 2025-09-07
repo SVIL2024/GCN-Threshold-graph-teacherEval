@@ -619,7 +619,7 @@ def main():
         print("="*60)
         
         plot_comprehensive_comparison(gcn_results, ml_results, mlp_results)
-        plot_radar_chart(gcn_results, ml_results, mlp_results)
+        # plot_radar_chart(gcn_results, ml_results, mlp_results)
         
         print("\n" + "="*60)
         print("Comparison Experiment Completed")

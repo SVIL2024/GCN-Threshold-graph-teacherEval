@@ -2,7 +2,7 @@
 This repository contains the code and resources for the "Teacher Cascade Evaluation" system, which is designed to evaluate teacher competence based on our data-driven cascaded Neural Network model. More details can be found in our paper: "Constructing Academic Collaboration Graphs for Teacher Performance Analysis with GCN".
 
 ## Requirements
-- Python 3.8.8
+- Python 3.9.23
 - Required libraries: pandas, numpy, matplotlib, scikit-learn, pytorch etc.
 
 ## Installation
